@@ -43,6 +43,14 @@ export const CardInvoiceSplitterModal: React.FC<CardInvoiceSplitterModalProps> =
   const [parsedData, setParsedData] = useState<CardStatementData | null>(null);
   const [items, setItems] = useState<CardStatementItem[]>([]);
   const [filterSearch, setFilterSearch] = useState('');
+  const [inlineKey, setInlineKey] = useState(() => typeof window !== 'undefined' ? (localStorage.getItem('user_gemini_api_key') || '') : '');
+
+  const saveInlineKey = (val: string) => {
+    setInlineKey(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('user_gemini_api_key', val.trim());
+    }
+  };
 
   // Handle uploading prints/screenshots
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,12 +107,14 @@ export const CardInvoiceSplitterModal: React.FC<CardInvoiceSplitterModalProps> =
         setParsedData(res);
         setItems(formattedItems);
         setStatusMessage(`Sucesso! ${formattedItems.length} compra(s) extraída(s). Agora classifique quem fez cada compra.`);
+      } else if (res && res.error) {
+        setStatusMessage(res.error);
       } else {
-        setStatusMessage('Não foi possível identificar os lançamentos com clareza. Tente um print mais nítido ou adicione manualmente.');
+        setStatusMessage('Não foi possível identificar os lançamentos com clareza. Tente um print mais nítido ou insira a chave do Gemini em Configurações.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setStatusMessage('Erro de conexão ao ler fatura.');
+      setStatusMessage(`Erro de conexão ao ler fatura: ${err?.message || err}`);
     } finally {
       setIsProcessing(false);
     }
@@ -361,12 +371,36 @@ export const CardInvoiceSplitterModal: React.FC<CardInvoiceSplitterModalProps> =
               </div>
             )}
 
-            {/* STATUS MESSAGE */}
+            {/* STATUS MESSAGE & INLINE API KEY INPUT FOR VERCEL */}
             {statusMessage && (
-              <p className="text-xs text-indigo-300 bg-indigo-950/40 p-3 rounded-xl border border-indigo-800/40 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
-                <span>{statusMessage}</span>
-              </p>
+              <div className="space-y-2 bg-indigo-950/40 p-3 rounded-xl border border-indigo-800/40">
+                <p className="text-xs text-indigo-300 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span>{statusMessage}</span>
+                </p>
+
+                {(statusMessage.includes('Chave') || statusMessage.includes('Vercel') || statusMessage.includes('GEMINI_API_KEY')) && (
+                  <div className="pt-2 border-t border-indigo-900/60 flex flex-col sm:flex-row gap-2 items-center">
+                    <input
+                      type="password"
+                      placeholder="Cole aqui sua chave do Gemini (AIzaSy...)"
+                      value={inlineKey}
+                      onChange={e => saveInlineKey(e.target.value)}
+                      className="flex-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusMessage('Chave salva! Tentando ler a fatura novamente...');
+                        handleAnalyzeWithGemini();
+                      }}
+                      className="w-full sm:w-auto px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-all shrink-0"
+                    >
+                      Salvar e Ler Fatura
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         ) : (

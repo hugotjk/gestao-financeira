@@ -218,6 +218,8 @@ export async function scanDocumentWithGemini(fileBase64: string, mimeType: strin
  * Gemini Credit Card Statement Reader with Vercel Client Fallback
  */
 export async function parseCardStatementWithGemini(imagesBase64: string[], mimeType = 'image/jpeg') {
+  let serverErrorMsg = '';
+
   try {
     const res = await fetch('/api/parse-card-statement', {
       method: 'POST',
@@ -227,14 +229,23 @@ export async function parseCardStatementWithGemini(imagesBase64: string[], mimeT
 
     if (res.ok) {
       const data = await res.json();
-      return data;
+      if (data && (data.items || data.bankName)) return data;
+      if (data && data.error) serverErrorMsg = data.error;
+    } else {
+      try {
+        const errJson = await res.json();
+        if (errJson && errJson.error) serverErrorMsg = errJson.error;
+      } catch (_) {}
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn('Card statement server API unavailable, trying client fallback...', err);
   }
 
-  // Client-side fallback for Vercel static sites
-  const clientKey = typeof window !== 'undefined' ? (localStorage.getItem('user_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY) : null;
+  // Client-side fallback for Vercel static deployments
+  const clientKey = typeof window !== 'undefined'
+    ? (localStorage.getItem('user_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY)
+    : null;
+
   if (clientKey) {
     try {
       const { GoogleGenAI } = await import('@google/genai');
@@ -278,10 +289,20 @@ Responda APENAS com objeto JSON válido estrito.`,
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
-    } catch (clientErr) {
+    } catch (clientErr: any) {
       console.error('Client card statement OCR error:', clientErr);
+      return {
+        error: `Erro ao processar imagem no navegador: ${clientErr?.message || 'Chave do Gemini inválida ou limite excedido.'}`
+      };
     }
   }
 
-  return null;
+  // If both failed and no key was found
+  if (serverErrorMsg) {
+    return { error: `Erro no servidor: ${serverErrorMsg}` };
+  }
+
+  return {
+    error: 'Chave da API Gemini não configurada no link da Vercel! Clique no ícone de Engrenagem (Configurações) no topo da tela para inserir sua chave gratuita do Google AI Studio ou adicione GEMINI_API_KEY no painel da Vercel.'
+  };
 }
