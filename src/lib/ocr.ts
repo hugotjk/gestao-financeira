@@ -165,7 +165,7 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 }
 
 /**
- * Gemini Server Fallback OCR
+ * Gemini Server + Client Fallback OCR
  */
 export async function scanDocumentWithGemini(fileBase64: string, mimeType: string): Promise<ParsedBillData | null> {
   try {
@@ -175,17 +175,47 @@ export async function scanDocumentWithGemini(fileBase64: string, mimeType: strin
       body: JSON.stringify({ imageBase64: fileBase64, mimeType }),
     });
 
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data as ParsedBillData;
+    if (res.ok) {
+      const data = await res.json();
+      return data as ParsedBillData;
+    }
   } catch (err) {
-    console.error('Gemini OCR API error:', err);
-    return null;
+    console.warn('Server Gemini OCR API unavailable, trying client fallback...', err);
   }
+
+  // Client-side fallback for Vercel static sites
+  const clientKey = typeof window !== 'undefined' ? (localStorage.getItem('user_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY) : null;
+  if (clientKey) {
+    try {
+      const { GoogleGenAI } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey: clientKey });
+      const cleanBase64 = fileBase64.replace(/^data:[^;]+;base64,/, '');
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: `Analise a imagem da conta/boleto/comprovante e retorne APENAS um JSON válido no formato: {"barcode": string, "pixCode": string, "amount": number, "dueDate": "YYYY-MM-DD", "description": string}` },
+              { inlineData: { data: cleanBase64, mimeType } }
+            ]
+          }
+        ]
+      });
+
+      const jsonMatch = (response.text || '').match(/\{[\s\S]*\}/);
+      if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.error('Client Gemini OCR error:', e);
+    }
+  }
+
+  return null;
 }
 
 /**
- * Gemini Credit Card Statement Reader
+ * Gemini Credit Card Statement Reader with Vercel Client Fallback
  */
 export async function parseCardStatementWithGemini(imagesBase64: string[], mimeType = 'image/jpeg') {
   try {
@@ -195,11 +225,63 @@ export async function parseCardStatementWithGemini(imagesBase64: string[], mimeT
       body: JSON.stringify({ imagesBase64, mimeType }),
     });
 
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data;
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
   } catch (err) {
-    console.error('Card statement Gemini OCR API error:', err);
-    return null;
+    console.warn('Card statement server API unavailable, trying client fallback...', err);
   }
+
+  // Client-side fallback for Vercel static sites
+  const clientKey = typeof window !== 'undefined' ? (localStorage.getItem('user_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY) : null;
+  if (clientKey) {
+    try {
+      const { GoogleGenAI } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey: clientKey });
+      const images = Array.isArray(imagesBase64) ? imagesBase64 : [imagesBase64];
+
+      const parts: any[] = [
+        {
+          text: `Você é um especialista em OCR e leitura de faturas de cartão de crédito do Brasil (Nubank, Itaú, Mercado Pago, Bradesco, Santander, Inter, C6, Caixa, etc.).
+Analise a(s) imagem(ns) enviada(s) referente(s) à fatura do cartão de crédito.
+Extraia com máxima precisão:
+1. "bankName": Nome do banco ou emissor do cartão.
+2. "statementPeriod": Período ou mês de referência.
+3. "totalInvoiceAmount": Valor total da fatura se visível (número).
+4. "items": Lista completa de compras:
+   - "date": Data como aparece na imagem (ex: "04 JUN", "04/06").
+   - "description": Nome do estabelecimento/compra.
+   - "cardDigits": 4 últimos dígitos do cartão se constar.
+   - "amount": Valor numérico em R$ (número positivo).
+
+Responda APENAS com objeto JSON válido estrito.`,
+        },
+      ];
+
+      for (const img of images) {
+        const cleanBase64 = img.replace(/^data:[^;]+;base64,/, '');
+        parts.push({
+          inlineData: {
+            data: cleanBase64,
+            mimeType: mimeType || 'image/jpeg',
+          },
+        });
+      }
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts }],
+      });
+
+      const jsonMatch = (response.text || '').match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+    } catch (clientErr) {
+      console.error('Client card statement OCR error:', clientErr);
+    }
+  }
+
+  return null;
 }

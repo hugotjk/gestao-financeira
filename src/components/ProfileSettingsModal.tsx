@@ -18,6 +18,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const [p1Name, setP1Name] = useState(settings.p1Name);
   const [p2Name, setP2Name] = useState(settings.p2Name);
   const [reservePct, setReservePct] = useState(settings.reservePercentage.toString());
+  const [geminiApiKey, setGeminiApiKey] = useState(() => typeof window !== 'undefined' ? (localStorage.getItem('user_gemini_api_key') || '') : '');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,6 +104,25 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
               Este percentual será aplicado automaticamente como investimento comunitário sobre qualquer Renda Extra / Freela cadastrada.
+            </p>
+          </div>
+
+          <div className="pt-2 border-t border-slate-800 space-y-1">
+            <label className="block text-xs font-semibold text-slate-300">
+              Chave da API Gemini (Para Vercel / Leitor IA no Navegador)
+            </label>
+            <input
+              type="password"
+              placeholder="Cole sua chave AIzaSy... (Opcional se usar Vercel)"
+              value={geminiApiKey}
+              onChange={e => {
+                setGeminiApiKey(e.target.value);
+                localStorage.setItem('user_gemini_api_key', e.target.value.trim());
+              }}
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+            />
+            <p className="text-[10px] text-slate-500">
+              Se você implantou este projeto na Vercel e deseja usar a leitura IA de faturas diretamente pelo celular, insira sua chave gratuita da Google AI Studio aqui ou configure a variável <code className="text-indigo-400">GEMINI_API_KEY</code> no painel da Vercel.
             </p>
           </div>
 
