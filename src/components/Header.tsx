@@ -71,13 +71,20 @@ export const Header: React.FC<HeaderProps> = ({
                 <Wallet className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                  Gestão Proporcional
-                  {isSyncing && (
-                    <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin" title="Sincronizando..." />
-                  )}
-                </h1>
-                <p className="text-xs text-slate-400">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    Gestão Proporcional
+                  </h1>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 shadow-sm">
+                    {isSyncing ? (
+                      <RefreshCw className="w-3 h-3 text-emerald-400 animate-spin" />
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    )}
+                    <span>{isSyncing ? 'Sincronizando...' : 'Nuvem Ativa'}</span>
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
                   Orçamento Familiar: <span className="text-emerald-400 font-medium">{settings.p1Name}</span> & <span className="text-teal-300 font-medium">{settings.p2Name}</span>
                 </p>
               </div>

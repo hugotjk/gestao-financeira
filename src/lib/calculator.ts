@@ -49,9 +49,13 @@ export function calculateProportionalSummary(
     0
   );
 
-  // Automatic Reserve Contributions on Extra Incomes
-  const totalExtraIncomes = p1ExtraIncome + p2ExtraIncome;
-  const totalReserveContributions = (totalExtraIncomes * reservePercentage) / 100;
+  // Automatic Reserve Contributions on Incomes (calculated per income source % reserve)
+  const totalReserveContributions = incomes.reduce((acc, curr) => {
+    const pct = curr.reservePercentage !== undefined
+      ? curr.reservePercentage
+      : (curr.type === 'extra' ? reservePercentage : 0);
+    return acc + (curr.amount * pct) / 100;
+  }, 0);
 
   // Community Budget Needed
   const totalCommunityBudgetNeeded = totalSharedExpenses + totalReserveContributions;

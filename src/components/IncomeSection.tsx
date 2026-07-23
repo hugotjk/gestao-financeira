@@ -31,6 +31,7 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
   const [description, setDescription] = useState('');
   const [amountStr, setAmountStr] = useState('');
   const [type, setType] = useState<'fixed' | 'extra'>('fixed');
+  const [reservePctStr, setReservePctStr] = useState<string>('0');
 
   const activeUserName = activeTab === 'p1' ? p1Name : p2Name;
   const filteredIncomes = incomes.filter(i => i.userId === activeTab);
@@ -39,13 +40,22 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
     setDescription('');
     setAmountStr('');
     setType('fixed');
+    setReservePctStr('0');
     setIsAdding(false);
     setEditingIncome(null);
+  };
+
+  const handleTypeChange = (newType: 'fixed' | 'extra') => {
+    setType(newType);
+    if (!editingIncome) {
+      setReservePctStr(newType === 'extra' ? reservePercentage.toString() : '0');
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(amountStr.replace(',', '.'));
+    const reservePercentageVal = Math.max(0, parseFloat(reservePctStr.replace(',', '.')) || 0);
     if (!description.trim() || isNaN(amount) || amount <= 0) return;
 
     if (editingIncome) {
@@ -54,6 +64,7 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
         description: description.trim(),
         amount,
         type,
+        reservePercentage: reservePercentageVal,
       });
     } else {
       onAddIncome({
@@ -63,6 +74,7 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
         description: description.trim(),
         amount,
         type,
+        reservePercentage: reservePercentageVal,
       });
     }
     resetForm();
@@ -73,6 +85,10 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
     setDescription(inc.description);
     setAmountStr(inc.amount.toString());
     setType(inc.type);
+    const currentPct = inc.reservePercentage !== undefined
+      ? inc.reservePercentage
+      : (inc.type === 'extra' ? reservePercentage : 0);
+    setReservePctStr(currentPct.toString());
     setIsAdding(true);
   };
 
@@ -80,7 +96,12 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
   const totalUserExtra = filteredIncomes.filter(i => i.type === 'extra').reduce((acc, curr) => acc + curr.amount, 0);
   const totalUserGross = totalUserFixed + totalUserExtra;
 
-  const reserveFromUserExtra = (totalUserExtra * reservePercentage) / 100;
+  const totalUserReserve = filteredIncomes.reduce((acc, curr) => {
+    const pct = curr.reservePercentage !== undefined
+      ? curr.reservePercentage
+      : (curr.type === 'extra' ? reservePercentage : 0);
+    return acc + (curr.amount * pct) / 100;
+  }, 0);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-6 mb-6 shadow-sm">
@@ -135,16 +156,17 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Renda Extra / Freelas</span>
             <span className="text-[10px] text-teal-300 font-bold bg-teal-950 px-1.5 py-0.5 rounded border border-teal-800/50">
-              +{reservePercentage}% Reserva
+              R$ {totalUserExtra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </span>
           </div>
-          <p className="text-sm font-bold text-teal-300 mt-0.5">
-            R$ {totalUserExtra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </p>
-          {reserveFromUserExtra > 0 && (
-            <p className="text-[10px] text-teal-400/80 mt-1 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-teal-400" />
-              Aporte Reserva: R$ {reserveFromUserExtra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          {totalUserReserve > 0 ? (
+            <p className="text-[10px] text-teal-400/90 mt-2 flex items-center gap-1 font-semibold">
+              <Sparkles className="w-3 h-3 text-teal-400 shrink-0" />
+              Aporte Reserva: R$ {totalUserReserve.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+          ) : (
+            <p className="text-[10px] text-slate-500 mt-2">
+              Nenhum aporte acumulado no mês
             </p>
           )}
         </div>
@@ -170,8 +192,8 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="sm:col-span-1">
               <label className="block text-[11px] font-medium text-slate-300 mb-1">Descrição</label>
               <input
                 type="text"
@@ -200,12 +222,31 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
               <label className="block text-[11px] font-medium text-slate-300 mb-1">Tipo de Renda</label>
               <select
                 value={type}
-                onChange={e => setType(e.target.value as 'fixed' | 'extra')}
+                onChange={e => handleTypeChange(e.target.value as 'fixed' | 'extra')}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               >
                 <option value="fixed">Renda Fixa</option>
-                <option value="extra">Renda Extra / Freela (+Aporte Reserva)</option>
+                <option value="extra">Renda Extra / Freela</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-slate-300 mb-1 flex items-center justify-between">
+                <span>% Reserva (Aporte)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="100"
+                  placeholder="0"
+                  value={reservePctStr}
+                  onChange={e => setReservePctStr(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-3 pr-7 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                />
+                <span className="absolute right-2.5 top-1.5 text-xs text-slate-400 font-bold">%</span>
+              </div>
             </div>
           </div>
 
@@ -246,7 +287,11 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
           </p>
         ) : (
           filteredIncomes.map(inc => {
-            const extraReserve = inc.type === 'extra' ? (inc.amount * reservePercentage) / 100 : 0;
+            const itemPct = inc.reservePercentage !== undefined
+              ? inc.reservePercentage
+              : (inc.type === 'extra' ? reservePercentage : 0);
+            const itemReserveAmount = (inc.amount * itemPct) / 100;
+
             return (
               <div
                 key={inc.id}
@@ -271,9 +316,13 @@ export const IncomeSection: React.FC<IncomeSectionProps> = ({
                         </span>
                       )}
                     </h4>
-                    {inc.type === 'extra' && extraReserve > 0 && (
+                    {itemPct > 0 ? (
                       <p className="text-[10px] text-teal-400/90 mt-0.5">
-                        Aporte Reserva ({reservePercentage}%): R$ {extraReserve.toFixed(2)}
+                        Aporte Reserva ({itemPct}%): R$ {itemReserveAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        Sem aporte para reserva (0%)
                       </p>
                     )}
                   </div>

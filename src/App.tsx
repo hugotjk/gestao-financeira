@@ -17,6 +17,8 @@ import {
   saveLocalData,
   subscribeToRealtimeChanges,
   cascadeNameChange,
+  fetchServerData,
+  pushServerData,
 } from './lib/supabase';
 import { calculateProportionalSummary } from './lib/calculator';
 import { generateExcelReport } from './lib/exportToExcel';
@@ -27,6 +29,7 @@ import { IncomeSection } from './components/IncomeSection';
 import { ExpenseSection } from './components/ExpenseSection';
 import { BillDistributionModal } from './components/BillDistributionModal';
 import { OcrScannerModal } from './components/OcrScannerModal';
+import { CardInvoiceSplitterModal } from './components/CardInvoiceSplitterModal';
 import { ProfileSettingsModal } from './components/ProfileSettingsModal';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { ReserveHistoryModal } from './components/ReserveHistoryModal';
@@ -51,18 +54,77 @@ export default function App() {
   const [isSupabaseOpen, setIsSupabaseOpen] = useState(false);
   const [isDistributionOpen, setIsDistributionOpen] = useState(false);
   const [isOcrOpen, setIsOcrOpen] = useState(false);
+  const [isCardSplitterOpen, setIsCardSplitterOpen] = useState(false);
   const [isReserveHistoryOpen, setIsReserveHistoryOpen] = useState(false);
   const [focusUnconfirmed, setFocusUnconfirmed] = useState(false);
 
-  // Load initial data
+  // Core sync helper
+  const syncServerAndLocalData = async () => {
+    setIsSyncing(true);
+    try {
+      const serverData = await fetchServerData();
+      const localData = loadLocalData();
+
+      if (serverData) {
+        const localHasItems = localData.incomes.length > 0 || localData.expenses.length > 0;
+        const serverHasItems = serverData.incomes.length > 0 || serverData.expenses.length > 0;
+
+        if (localHasItems && !serverHasItems) {
+          // Push existing local data from computer session to server storage
+          await pushServerData(localData.settings, localData.incomes, localData.expenses);
+        } else if (serverData.updatedAt > (localData.updatedAt || 0) || (!localHasItems && serverHasItems)) {
+          // Server has newer or existing data, update local state & local storage
+          setSettings(serverData.settings);
+          setIncomes(serverData.incomes);
+          setExpenses(serverData.expenses);
+          saveLocalData(serverData.settings, serverData.incomes, serverData.expenses, false);
+        } else if (localHasItems && serverHasItems && localData.updatedAt > serverData.updatedAt) {
+          // Local data is newer, push to server
+          await pushServerData(localData.settings, localData.incomes, localData.expenses);
+        }
+      } else if (localData.incomes.length > 0 || localData.expenses.length > 0) {
+        // Server has no data file yet, push local data to create it
+        await pushServerData(localData.settings, localData.incomes, localData.expenses);
+      }
+    } catch (err) {
+      console.warn('Sync error:', err);
+    } finally {
+      setTimeout(() => setIsSyncing(false), 500);
+    }
+  };
+
+  // Load initial data & auto sync
   useEffect(() => {
+    // 1. Load local cache immediately
     const { settings: loadedSettings, incomes: loadedIncomes, expenses: loadedExpenses } = loadLocalData();
     setSettings(loadedSettings);
     setIncomes(loadedIncomes);
     setExpenses(loadedExpenses);
+
+    // 2. Fetch server cloud data immediately
+    syncServerAndLocalData();
+
+    // 3. Listen to window focus (e.g. opening app on phone or returning to browser tab)
+    const handleFocus = () => {
+      syncServerAndLocalData();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    // 4. Interval polling every 10 seconds for seamless multi-device live sync
+    const interval = setInterval(() => {
+      syncServerAndLocalData();
+    }, 10000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+      clearInterval(interval);
+    };
   }, []);
 
-  // Setup Realtime Sync Subscription
+  // Setup Realtime Sync Subscription for local tabs
   useEffect(() => {
     const unsubscribe = subscribeToRealtimeChanges(() => {
       setIsSyncing(true);
@@ -81,7 +143,7 @@ export default function App() {
     setSettings(newSettings);
     setIncomes(newIncomes);
     setExpenses(newExpenses);
-    saveLocalData(newSettings, newIncomes, newExpenses);
+    saveLocalData(newSettings, newIncomes, newExpenses, true);
   };
 
   // Filtered month datasets
@@ -150,6 +212,15 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     };
     updateAppData(settings, incomes, [...expenses, newExp]);
+  };
+
+  const handleBatchAddExpenses = (expensesToSave: Omit<ExpenseItem, 'id' | 'updatedAt'>[]) => {
+    const newItems: ExpenseItem[] = expensesToSave.map((item, idx) => ({
+      ...item,
+      id: `exp-card-${Date.now()}-${idx}`,
+      updatedAt: new Date().toISOString(),
+    }));
+    updateAppData(settings, incomes, [...expenses, ...newItems]);
   };
 
   const handleUpdateExpense = (updatedExp: ExpenseItem) => {
@@ -344,6 +415,7 @@ export default function App() {
           onUpdateExpense={handleUpdateExpense}
           onDeleteExpense={handleDeleteExpense}
           onOpenOcrScanner={() => setIsOcrOpen(true)}
+          onOpenCardSplitter={() => setIsCardSplitterOpen(true)}
           focusUnconfirmedTab={focusUnconfirmed}
           onCopyFromPreviousMonth={handleCopyFromPreviousMonth}
         />
@@ -358,6 +430,14 @@ export default function App() {
       </footer>
 
       {/* MODALS */}
+      {isCardSplitterOpen && (
+        <CardInvoiceSplitterModal
+          settings={settings}
+          currentMonth={currentMonth}
+          onApplyExpenses={handleBatchAddExpenses}
+          onClose={() => setIsCardSplitterOpen(false)}
+        />
+      )}
       {isSettingsOpen && (
         <ProfileSettingsModal
           settings={settings}

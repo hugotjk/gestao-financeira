@@ -174,7 +174,7 @@ export const DashboardSummary: React.FC<DashboardSummaryProps> = ({
                 Reserva do Casal
               </span>
               <span className="text-[10px] text-teal-300 font-bold bg-teal-950/80 border border-teal-800/50 px-2 py-0.5 rounded-full">
-                {reservePercentage}% s/ Extras
+                Aporte de Rendas
               </span>
             </div>
 
@@ -183,7 +183,7 @@ export const DashboardSummary: React.FC<DashboardSummaryProps> = ({
                 {formatCurrency(summary.totalReserveContributions)}
               </p>
               <p className="text-[10px] text-slate-400 mt-0.5">
-                Aporte automático sobre rendas extras do mês.
+                Aporte configurado individualmente em cada renda do mês.
               </p>
             </div>
           </div>

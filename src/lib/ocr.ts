@@ -183,3 +183,23 @@ export async function scanDocumentWithGemini(fileBase64: string, mimeType: strin
     return null;
   }
 }
+
+/**
+ * Gemini Credit Card Statement Reader
+ */
+export async function parseCardStatementWithGemini(imagesBase64: string[], mimeType = 'image/jpeg') {
+  try {
+    const res = await fetch('/api/parse-card-statement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagesBase64, mimeType }),
+    });
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error('Card statement Gemini OCR API error:', err);
+    return null;
+  }
+}

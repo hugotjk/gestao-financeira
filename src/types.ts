@@ -14,6 +14,7 @@ export interface IncomeSource {
   description: string;
   amount: number;
   type: 'fixed' | 'extra'; // Fixed or Extra/Freela
+  reservePercentage?: number; // % configured for reserve (e.g. 0, 10, 20)
   createdAt: string;
 }
 
@@ -36,7 +37,31 @@ export interface ExpenseItem {
   barcode?: string; // Linha digitável ou código de barras
   pixCode?: string; // Chave Pix Copia e Cola
   notes?: string;
+  cardItemsBreakdown?: {
+    id: string;
+    date?: string;
+    description: string;
+    cardDigits?: string;
+    amount: number;
+    assignedTo: 'p1' | 'p2' | 'shared';
+  }[];
   updatedAt: string;
+}
+
+export interface CardStatementItem {
+  id: string;
+  date?: string;
+  description: string;
+  cardDigits?: string;
+  amount: number;
+  assignedTo: 'p1' | 'p2' | 'shared';
+}
+
+export interface CardStatementData {
+  bankName: string;
+  statementPeriod?: string;
+  totalInvoiceAmount?: number;
+  items: CardStatementItem[];
 }
 
 export interface ReserveContribution {

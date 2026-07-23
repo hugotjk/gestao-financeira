@@ -13,13 +13,16 @@ export const ReserveHistoryModal: React.FC<ReserveHistoryModalProps> = ({
   reservePercentage,
   onClose,
 }) => {
-  // Filter extra incomes across all recorded months
-  const extraIncomes = incomes.filter(i => i.type === 'extra');
+  // Filter incomes with positive reserve contribution across all recorded months
+  const reserveIncomes = incomes.filter(i => {
+    const pct = i.reservePercentage !== undefined ? i.reservePercentage : (i.type === 'extra' ? reservePercentage : 0);
+    return pct > 0;
+  });
 
-  const totalReserve = extraIncomes.reduce(
-    (acc, curr) => acc + (curr.amount * reservePercentage) / 100,
-    0
-  );
+  const totalReserve = reserveIncomes.reduce((acc, curr) => {
+    const pct = curr.reservePercentage !== undefined ? curr.reservePercentage : (curr.type === 'extra' ? reservePercentage : 0);
+    return acc + (curr.amount * pct) / 100;
+  }, 0);
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -33,7 +36,7 @@ export const ReserveHistoryModal: React.FC<ReserveHistoryModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-white">Histórico da Reserva do Casal</h2>
-              <p className="text-xs text-slate-400">Aportes Automáticos de {reservePercentage}% sobre Rendas Extras</p>
+              <p className="text-xs text-slate-400">Aportes de Reserva configurados nas Fontes de Renda</p>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
@@ -53,21 +56,22 @@ export const ReserveHistoryModal: React.FC<ReserveHistoryModalProps> = ({
             </p>
           </div>
           <div className="text-right text-xs text-slate-400">
-            <span>{extraIncomes.length} aporte(s) registrado(s)</span>
+            <span>{reserveIncomes.length} aporte(s) registrado(s)</span>
           </div>
         </div>
 
         {/* LOG LIST */}
         <div className="space-y-2">
-          {extraIncomes.length === 0 ? (
+          {reserveIncomes.length === 0 ? (
             <div className="text-center py-8 bg-slate-950 rounded-xl border border-slate-800">
               <p className="text-xs text-slate-500 italic">
-                Nenhum aporte na reserva gerado ainda. Cadastre uma "Renda Extra" na aba de rendas para iniciar os aportes.
+                Nenhum aporte na reserva gerado ainda. Configure um % de reserva em suas fontes de renda para acumular.
               </p>
             </div>
           ) : (
-            extraIncomes.map(inc => {
-              const contribution = (inc.amount * reservePercentage) / 100;
+            reserveIncomes.map(inc => {
+              const pct = inc.reservePercentage !== undefined ? inc.reservePercentage : (inc.type === 'extra' ? reservePercentage : 0);
+              const contribution = (inc.amount * pct) / 100;
               return (
                 <div
                   key={inc.id}
@@ -81,7 +85,7 @@ export const ReserveHistoryModal: React.FC<ReserveHistoryModalProps> = ({
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400">
-                      Origem: <strong className="text-slate-200">{inc.userName}</strong> (Renda Extra R$ {inc.amount.toFixed(2)})
+                      Origem: <strong className="text-slate-200">{inc.userName}</strong> (Renda R$ {inc.amount.toFixed(2)})
                     </p>
                   </div>
 
@@ -90,7 +94,7 @@ export const ReserveHistoryModal: React.FC<ReserveHistoryModalProps> = ({
                       + R$ {contribution.toFixed(2)}
                     </span>
                     <span className="text-[10px] text-slate-500 font-medium">
-                      ({reservePercentage}% de aporte)
+                      ({pct}% de aporte)
                     </span>
                   </div>
                 </div>

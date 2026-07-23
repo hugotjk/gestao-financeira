@@ -42,29 +42,78 @@ export function saveSupabaseCredentials(url: string, key: string) {
 }
 
 // -------------------------------------------------------------------
-// LOCAL STORAGE + BROADCAST CHANNEL REALTIME ENGINE
+// LOCAL STORAGE + SERVER DATA SYNC + BROADCAST CHANNEL REALTIME ENGINE
 // -------------------------------------------------------------------
 const broadcastChannel = typeof window !== 'undefined' ? new BroadcastChannel('family_budget_realtime_channel') : null;
+
+export async function fetchServerData() {
+  try {
+    const res = await fetch('/api/data');
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.hasData) return null;
+    return data as {
+      settings: AppSettings;
+      incomes: IncomeSource[];
+      expenses: ExpenseItem[];
+      updatedAt: number;
+    };
+  } catch (err) {
+    console.warn('Failed to fetch server data:', err);
+    return null;
+  }
+}
+
+export async function pushServerData(
+  settings: AppSettings,
+  incomes: IncomeSource[],
+  expenses: ExpenseItem[]
+) {
+  try {
+    const timestamp = Date.now();
+    localStorage.setItem('family_budget_updated_at', timestamp.toString());
+    await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings, incomes, expenses, updatedAt: timestamp }),
+    });
+  } catch (err) {
+    console.warn('Failed to push server data:', err);
+  }
+}
 
 export function loadLocalData() {
   const settingsStr = localStorage.getItem('family_budget_settings');
   const incomesStr = localStorage.getItem('family_budget_incomes');
   const expensesStr = localStorage.getItem('family_budget_expenses');
+  const updatedAtStr = localStorage.getItem('family_budget_updated_at');
 
   const settings: AppSettings = settingsStr ? JSON.parse(settingsStr) : DEFAULT_SETTINGS;
   const incomes: IncomeSource[] = incomesStr ? JSON.parse(incomesStr) : DEFAULT_INCOMES;
   const expenses: ExpenseItem[] = expensesStr ? JSON.parse(expensesStr) : DEFAULT_EXPENSES;
+  const updatedAt = updatedAtStr ? parseInt(updatedAtStr, 10) : 0;
 
-  return { settings, incomes, expenses };
+  return { settings, incomes, expenses, updatedAt };
 }
 
-export function saveLocalData(settings: AppSettings, incomes: IncomeSource[], expenses: ExpenseItem[]) {
+export function saveLocalData(
+  settings: AppSettings,
+  incomes: IncomeSource[],
+  expenses: ExpenseItem[],
+  syncToServer = true
+) {
+  const timestamp = Date.now();
   localStorage.setItem('family_budget_settings', JSON.stringify(settings));
   localStorage.setItem('family_budget_incomes', JSON.stringify(incomes));
   localStorage.setItem('family_budget_expenses', JSON.stringify(expenses));
+  localStorage.setItem('family_budget_updated_at', timestamp.toString());
 
   if (broadcastChannel) {
-    broadcastChannel.postMessage({ type: 'DATA_UPDATED', timestamp: Date.now() });
+    broadcastChannel.postMessage({ type: 'DATA_UPDATED', timestamp });
+  }
+
+  if (syncToServer) {
+    pushServerData(settings, incomes, expenses);
   }
 }
 

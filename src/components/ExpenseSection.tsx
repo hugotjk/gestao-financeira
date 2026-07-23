@@ -16,8 +16,10 @@ import {
   User,
   X,
   RefreshCw,
+  CreditCard,
 } from 'lucide-react';
 import { ExpenseItem } from '../types';
+import { CardItemsBreakdownModal } from './CardItemsBreakdownModal';
 
 interface ExpenseSectionProps {
   currentMonth: string;
@@ -28,6 +30,7 @@ interface ExpenseSectionProps {
   onUpdateExpense: (expense: ExpenseItem) => void;
   onDeleteExpense: (id: string) => void;
   onOpenOcrScanner: () => void;
+  onOpenCardSplitter?: () => void;
   focusUnconfirmedTab?: boolean;
   onCopyFromPreviousMonth?: () => void;
 }
@@ -41,6 +44,7 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
   onUpdateExpense,
   onDeleteExpense,
   onOpenOcrScanner,
+  onOpenCardSplitter,
   focusUnconfirmedTab,
   onCopyFromPreviousMonth,
 }) => {
@@ -50,6 +54,9 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseItem | null>(null);
+
+  // Card breakdown detail viewer state
+  const [viewingBreakdownExpense, setViewingBreakdownExpense] = useState<ExpenseItem | null>(null);
 
   // Confirm Actual Amount Inline Modal State
   const [confirmingExpense, setConfirmingExpense] = useState<ExpenseItem | null>(null);
@@ -258,6 +265,16 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
             >
               <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
               <span>Copiar do Mês Anterior</span>
+            </button>
+          )}
+
+          {onOpenCardSplitter && (
+            <button
+              onClick={onOpenCardSplitter}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/60 rounded-xl transition-all shadow-sm"
+            >
+              <CreditCard className="w-4 h-4 text-purple-400" />
+              <span>Dividir Fatura de Cartão (IA)</span>
             </button>
           )}
 
@@ -685,6 +702,19 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${dueBadge.color}`}>
                         {dueBadge.label}
                       </span>
+
+                      {/* Card Items Breakdown Badge */}
+                      {exp.cardItemsBreakdown && exp.cardItemsBreakdown.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingBreakdownExpense(exp)}
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-950/80 text-purple-300 border border-purple-800/60 hover:bg-purple-900 flex items-center gap-1 transition-all"
+                          title="Ver compras individuais desta fatura"
+                        >
+                          <Receipt className="w-3 h-3 text-purple-400" />
+                          <span>Ver {exp.cardItemsBreakdown.length} compras</span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
@@ -775,6 +805,16 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
           })
         )}
       </div>
+
+      {/* BREAKDOWN MODAL */}
+      {viewingBreakdownExpense && (
+        <CardItemsBreakdownModal
+          expense={viewingBreakdownExpense}
+          p1Name={p1Name}
+          p2Name={p2Name}
+          onClose={() => setViewingBreakdownExpense(null)}
+        />
+      )}
 
     </div>
   );
