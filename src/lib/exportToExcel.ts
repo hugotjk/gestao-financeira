@@ -62,7 +62,7 @@ export async function generateExcelReport(
       description: item.description,
       category: item.category,
       divisionType: item.divisionType === 'shared' ? 'Compartilhado' : 'Individual',
-      individualUser: item.divisionType === 'individual' ? (item.individualUserName || item.individualUserId) : 'N/A',
+      individualUser: item.divisionType === 'individual' ? (item.individualUserName || item.individualUserId) : 'Casal (Ambos)',
       estimatedAmount: item.expenseType === 'estimated' ? item.estimatedAmount || 0 : item.actualAmount,
       actualAmount: item.actualAmount,
       paymentStatus: item.paymentStatus === 'paid' ? 'Pago' : 'Pendente',
