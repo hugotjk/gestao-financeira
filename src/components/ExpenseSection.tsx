@@ -15,6 +15,7 @@ import {
   Users,
   User,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import { ExpenseItem } from '../types';
 
@@ -28,6 +29,7 @@ interface ExpenseSectionProps {
   onDeleteExpense: (id: string) => void;
   onOpenOcrScanner: () => void;
   focusUnconfirmedTab?: boolean;
+  onCopyFromPreviousMonth?: () => void;
 }
 
 export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
@@ -40,6 +42,7 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
   onDeleteExpense,
   onOpenOcrScanner,
   focusUnconfirmedTab,
+  onCopyFromPreviousMonth,
 }) => {
   const [filterTab, setFilterTab] = useState<
     'all' | 'shared' | 'individual' | 'unconfirmed' | 'pending' | 'paid'
@@ -247,6 +250,17 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {onCopyFromPreviousMonth && (
+            <button
+              onClick={onCopyFromPreviousMonth}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl transition-all"
+              title="Copiar lançamentos do mês anterior para este mês"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Copiar do Mês Anterior</span>
+            </button>
+          )}
+
           <button
             onClick={onOpenOcrScanner}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/60 rounded-xl transition-all"
@@ -605,10 +619,25 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
       {/* EXPENSES LIST GRID / TABLE */}
       <div className="space-y-3">
         {filteredExpenses.length === 0 ? (
-          <div className="text-center py-8 bg-slate-950/50 rounded-xl border border-slate-800/80">
-            <p className="text-xs text-slate-400 italic">
-              Nenhuma despesa encontrada para os filtros selecionados.
+          <div className="text-center py-8 px-4 bg-slate-950/50 rounded-2xl border border-slate-800/80 space-y-3">
+            <p className="text-xs text-slate-400">
+              Nenhuma despesa encontrada para os filtros selecionados neste mês.
             </p>
+            {onCopyFromPreviousMonth && expenses.length === 0 && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={onCopyFromPreviousMonth}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-md transition-all"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Copiar Lançamentos do Mês Anterior</span>
+                </button>
+                <p className="text-[11px] text-slate-500 mt-2">
+                  Copia todas as contas com datas ajustadas para este mês (contas com valor previsto ficam aguardando confirmação).
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           filteredExpenses.map(exp => {

@@ -231,6 +231,55 @@ export default function App() {
     updateAppData(settings, [], []);
   };
 
+  const handleCopyFromPreviousMonth = () => {
+    const [year, month] = currentMonth.split('-').map(Number);
+    const prevDate = new Date(year, month - 2, 1);
+    const prevMonthStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
+    const prevExpenses = expenses.filter(e => e.monthYear === prevMonthStr);
+    const prevIncomes = incomes.filter(i => i.monthYear === prevMonthStr);
+
+    if (prevExpenses.length === 0 && prevIncomes.length === 0) {
+      alert(`Não foram encontradas contas ou rendas cadastradas no mês anterior (${prevMonthStr}).`);
+      return;
+    }
+
+    // Copy expenses
+    const newExpenses: ExpenseItem[] = prevExpenses.map(exp => {
+      let day = '10';
+      if (exp.dueDate) {
+        const parts = exp.dueDate.split('-');
+        if (parts.length === 3) day = parts[2];
+      }
+      const newDueDate = `${currentMonth}-${day}`;
+
+      return {
+        ...exp,
+        id: `exp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        monthYear: currentMonth,
+        dueDate: newDueDate,
+        actualAmount: exp.expenseType === 'estimated' ? 0 : exp.actualAmount,
+        isConfirmed: exp.expenseType === 'fixed' ? true : false,
+        paymentStatus: 'pending',
+        paidBy: 'none',
+        assignedTo: 'none',
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    // Copy incomes (fixed incomes)
+    const newIncomes: IncomeSource[] = prevIncomes
+      .filter(inc => inc.type === 'fixed')
+      .map(inc => ({
+        ...inc,
+        id: `inc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        monthYear: currentMonth,
+        createdAt: new Date().toISOString(),
+      }));
+
+    updateAppData(settings, [...incomes, ...newIncomes], [...expenses, ...newExpenses]);
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950">
       
@@ -296,6 +345,7 @@ export default function App() {
           onDeleteExpense={handleDeleteExpense}
           onOpenOcrScanner={() => setIsOcrOpen(true)}
           focusUnconfirmedTab={focusUnconfirmed}
+          onCopyFromPreviousMonth={handleCopyFromPreviousMonth}
         />
 
       </main>
