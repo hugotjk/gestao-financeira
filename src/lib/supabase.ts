@@ -48,7 +48,10 @@ const broadcastChannel = typeof window !== 'undefined' ? new BroadcastChannel('f
 
 export async function fetchServerData() {
   try {
-    const res = await fetch('/api/data');
+    const room = (typeof window !== 'undefined' ? localStorage.getItem('family_budget_sync_room') : null) || 'default_budget';
+    const res = await fetch(`/api/data?room=${encodeURIComponent(room)}`, {
+      headers: { 'x-sync-room': room },
+    });
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.hasData) return null;
@@ -72,9 +75,13 @@ export async function pushServerData(
   try {
     const timestamp = Date.now();
     localStorage.setItem('family_budget_updated_at', timestamp.toString());
-    await fetch('/api/data', {
+    const room = (typeof window !== 'undefined' ? localStorage.getItem('family_budget_sync_room') : null) || 'default_budget';
+    await fetch(`/api/data?room=${encodeURIComponent(room)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-sync-room': room,
+      },
       body: JSON.stringify({ settings, incomes, expenses, updatedAt: timestamp }),
     });
   } catch (err) {

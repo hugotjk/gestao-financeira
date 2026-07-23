@@ -302,6 +302,10 @@ export default function App() {
     updateAppData(settings, [], []);
   };
 
+  const handleImportBackup = (data: { settings: AppSettings; incomes: IncomeSource[]; expenses: ExpenseItem[] }) => {
+    updateAppData(data.settings, data.incomes, data.expenses);
+  };
+
   const handleCopyFromPreviousMonth = () => {
     const [year, month] = currentMonth.split('-').map(Number);
     const prevDate = new Date(year, month - 2, 1);
@@ -439,8 +443,12 @@ export default function App() {
       {isSettingsOpen && (
         <ProfileSettingsModal
           settings={settings}
+          incomes={incomes}
+          expenses={expenses}
           onSaveSettings={handleSaveSettings}
           onClearAllData={handleClearAllData}
+          onImportBackup={handleImportBackup}
+          onForceSync={syncServerAndLocalData}
           onClose={() => setIsSettingsOpen(false)}
         />
       )}
