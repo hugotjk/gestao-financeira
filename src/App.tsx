@@ -414,8 +414,6 @@ export default function App() {
           onAddExpense={handleAddExpense}
           onUpdateExpense={handleUpdateExpense}
           onDeleteExpense={handleDeleteExpense}
-          onOpenOcrScanner={() => setIsOcrOpen(true)}
-          onOpenCardSplitter={() => setIsCardSplitterOpen(true)}
           focusUnconfirmedTab={focusUnconfirmed}
           onCopyFromPreviousMonth={handleCopyFromPreviousMonth}
         />

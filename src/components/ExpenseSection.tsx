@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { ExpenseItem } from '../types';
 import { CardItemsBreakdownModal } from './CardItemsBreakdownModal';
+import { QuickCardSetupModal } from './QuickCardSetupModal';
 
 interface ExpenseSectionProps {
   currentMonth: string;
@@ -29,7 +30,7 @@ interface ExpenseSectionProps {
   onAddExpense: (expense: Omit<ExpenseItem, 'id' | 'updatedAt'>) => void;
   onUpdateExpense: (expense: ExpenseItem) => void;
   onDeleteExpense: (id: string) => void;
-  onOpenOcrScanner: () => void;
+  onOpenOcrScanner?: () => void;
   onOpenCardSplitter?: () => void;
   focusUnconfirmedTab?: boolean;
   onCopyFromPreviousMonth?: () => void;
@@ -43,8 +44,6 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
   onAddExpense,
   onUpdateExpense,
   onDeleteExpense,
-  onOpenOcrScanner,
-  onOpenCardSplitter,
   focusUnconfirmedTab,
   onCopyFromPreviousMonth,
 }) => {
@@ -53,6 +52,7 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
   >(focusUnconfirmedTab ? 'unconfirmed' : 'all');
 
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isQuickCardOpen, setIsQuickCardOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseItem | null>(null);
 
   // Card breakdown detail viewer state
@@ -268,22 +268,12 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
             </button>
           )}
 
-          {onOpenCardSplitter && (
-            <button
-              onClick={onOpenCardSplitter}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/60 rounded-xl transition-all shadow-sm"
-            >
-              <CreditCard className="w-4 h-4 text-purple-400" />
-              <span>Dividir Fatura de Cartão (IA)</span>
-            </button>
-          )}
-
           <button
-            onClick={onOpenOcrScanner}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/60 rounded-xl transition-all"
+            onClick={() => setIsQuickCardOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/60 rounded-xl transition-all shadow-sm"
           >
-            <Scan className="w-4 h-4 text-indigo-400" />
-            <span>Leitor OCR / Pix</span>
+            <CreditCard className="w-4 h-4 text-purple-400" />
+            <span>Cadastrar Cartão (3 Vias)</span>
           </button>
 
           <button
@@ -813,6 +803,19 @@ export const ExpenseSection: React.FC<ExpenseSectionProps> = ({
           p1Name={p1Name}
           p2Name={p2Name}
           onClose={() => setViewingBreakdownExpense(null)}
+        />
+      )}
+
+      {/* QUICK CARD 3-VIAS MODAL */}
+      {isQuickCardOpen && (
+        <QuickCardSetupModal
+          currentMonth={currentMonth}
+          p1Name={p1Name}
+          p2Name={p2Name}
+          onAddBatchExpenses={(batch) => {
+            batch.forEach(exp => onAddExpense(exp));
+          }}
+          onClose={() => setIsQuickCardOpen(false)}
         />
       )}
 
