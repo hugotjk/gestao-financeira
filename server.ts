@@ -12,18 +12,23 @@ async function startServer() {
 
   const DB_FILE = path.join(process.cwd(), 'data_db.json');
 
-  let serverDataCache: {
+  let serverRoomsCache: Record<string, {
     settings?: any;
     incomes?: any[];
     expenses?: any[];
     updatedAt?: number;
-  } | null = null;
+  }> = {};
 
   try {
     if (fs.existsSync(DB_FILE)) {
       const fileContent = fs.readFileSync(DB_FILE, 'utf-8');
-      serverDataCache = JSON.parse(fileContent);
-      console.log('Loaded persistent app data from server disk storage.');
+      const parsed = JSON.parse(fileContent);
+      if (parsed && (parsed.settings || parsed.incomes || parsed.expenses)) {
+        serverRoomsCache['casal_hugo_mariana'] = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        serverRoomsCache = parsed;
+      }
+      console.log('Loaded persistent app rooms data from server disk storage.');
     }
   } catch (err) {
     console.error('Failed to read db file:', err);
@@ -36,26 +41,35 @@ async function startServer() {
 
   // Server Data Persistence Sync Endpoints
   app.get('/api/data', (req, res) => {
-    if (!serverDataCache) {
+    const room = (req.query?.room as string) || (req.headers['x-sync-room'] as string) || 'casal_hugo_mariana';
+    const cleanRoom = room.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'casal_hugo_mariana';
+
+    const roomData = serverRoomsCache[cleanRoom];
+    if (!roomData) {
       return res.json({ hasData: false });
     }
     return res.json({
       hasData: true,
-      ...serverDataCache,
+      ...roomData,
     });
   });
 
   app.post('/api/data', (req, res) => {
     try {
+      const room = (req.query?.room as string) || (req.headers['x-sync-room'] as string) || 'casal_hugo_mariana';
+      const cleanRoom = room.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'casal_hugo_mariana';
+
       const { settings, incomes, expenses, updatedAt } = req.body;
       const newTimestamp = updatedAt || Date.now();
-      serverDataCache = {
+
+      serverRoomsCache[cleanRoom] = {
         settings,
         incomes: incomes || [],
         expenses: expenses || [],
         updatedAt: newTimestamp,
       };
-      fs.writeFileSync(DB_FILE, JSON.stringify(serverDataCache, null, 2), 'utf-8');
+
+      fs.writeFileSync(DB_FILE, JSON.stringify(serverRoomsCache, null, 2), 'utf-8');
       return res.json({ success: true, updatedAt: newTimestamp });
     } catch (err: any) {
       console.error('Failed to save db file:', err);

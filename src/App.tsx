@@ -58,7 +58,7 @@ export default function App() {
   const [isReserveHistoryOpen, setIsReserveHistoryOpen] = useState(false);
   const [focusUnconfirmed, setFocusUnconfirmed] = useState(false);
 
-  // Core sync helper
+  // Core automatic cloud sync helper
   const syncServerAndLocalData = async (forceDirection?: 'pull' | 'push') => {
     setIsSyncing(true);
     try {
@@ -71,45 +71,43 @@ export default function App() {
           setIncomes(serverData.incomes);
           setExpenses(serverData.expenses);
           saveLocalData(serverData.settings, serverData.incomes, serverData.expenses, false);
-          alert('✅ Sucesso! Dados da nuvem foram baixados para o seu celular/navegador.');
-        } else {
-          alert('⚠️ Nenhum dado encontrado na nuvem para esta sala. Verifique se o PC enviou os dados com o mesmo código.');
         }
         return;
       }
 
       if (forceDirection === 'push') {
         await pushServerData(localData.settings, localData.incomes, localData.expenses);
-        alert('✅ Sucesso! Seus dados foram salvos e enviados para a nuvem.');
         return;
       }
 
-      // Auto Sync logic
+      // Seamless Auto Sync
       if (serverData) {
         const localHasItems = localData.incomes.length > 0 || localData.expenses.length > 0;
         const serverHasItems = serverData.incomes.length > 0 || serverData.expenses.length > 0;
 
-        if (localHasItems && !serverHasItems) {
-          // Push existing local data from PC to server storage
-          await pushServerData(localData.settings, localData.incomes, localData.expenses);
-        } else if (serverData.updatedAt > (localData.updatedAt || 0) || (!localHasItems && serverHasItems)) {
-          // Server has newer or existing data, update local state
+        // If server has newer data OR local is empty and server has items -> Pull from cloud
+        if (serverData.updatedAt > (localData.updatedAt || 0) || (!localHasItems && serverHasItems)) {
           setSettings(serverData.settings);
           setIncomes(serverData.incomes);
           setExpenses(serverData.expenses);
           saveLocalData(serverData.settings, serverData.incomes, serverData.expenses, false);
-        } else if (localHasItems && serverHasItems && localData.updatedAt > serverData.updatedAt) {
-          // Local data is newer, push to server
+        }
+        // If local is newer and server has items -> Push to cloud
+        else if (localHasItems && serverHasItems && localData.updatedAt > serverData.updatedAt) {
+          await pushServerData(localData.settings, localData.incomes, localData.expenses);
+        }
+        // If local has items and server is empty -> Push to cloud
+        else if (localHasItems && !serverHasItems) {
           await pushServerData(localData.settings, localData.incomes, localData.expenses);
         }
       } else if (localData.incomes.length > 0 || localData.expenses.length > 0) {
-        // Server has no data file yet, push local data to create it
+        // First initialization for this room in cloud
         await pushServerData(localData.settings, localData.incomes, localData.expenses);
       }
     } catch (err) {
       console.warn('Sync error:', err);
     } finally {
-      setTimeout(() => setIsSyncing(false), 500);
+      setTimeout(() => setIsSyncing(false), 400);
     }
   };
 
@@ -132,10 +130,10 @@ export default function App() {
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleFocus);
 
-    // 4. Interval polling every 10 seconds for seamless multi-device live sync
+    // 4. Frequent background polling (every 4 seconds) for real-time live sync across devices
     const interval = setInterval(() => {
       syncServerAndLocalData();
-    }, 10000);
+    }, 4000);
 
     return () => {
       window.removeEventListener('focus', handleFocus);

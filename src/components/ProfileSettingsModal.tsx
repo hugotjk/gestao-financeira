@@ -121,8 +121,12 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
                 <Key className="w-3.5 h-3.5 text-indigo-400" />
-                Código de Sincronização (Celular + PC)
+                Sincronização Automática (PC + Celular)
               </label>
+              <div className="flex items-center gap-1 text-[10px] text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Automática</span>
+              </div>
             </div>
             
             <input
@@ -139,39 +143,30 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
             />
 
             {onForceSync && (
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="flex items-center justify-between pt-0.5">
                 <button
                   type="button"
                   onClick={() => {
                     if (typeof window !== 'undefined') {
                       localStorage.setItem('family_budget_sync_room', syncRoom.trim() || 'casal_hugo_mariana');
                     }
-                    onForceSync('push');
+                    onForceSync();
+                    setImportStatus('Sincronizado com a nuvem!');
+                    setTimeout(() => setImportStatus(null), 2000);
                   }}
-                  className="py-2 px-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                  className="py-1.5 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 font-bold rounded-xl text-[11px] flex items-center gap-1.5 transition-all"
                 >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Enviar do PC para Nuvem</span>
+                  <RefreshCw className="w-3 h-3 text-indigo-400" />
+                  <span>Sincronizar Agora</span>
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('family_budget_sync_room', syncRoom.trim() || 'casal_hugo_mariana');
-                    }
-                    onForceSync('pull');
-                  }}
-                  className="py-2 px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-all"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Baixar no Celular</span>
-                </button>
+                {importStatus && (
+                  <span className="text-[11px] text-emerald-400 font-medium">{importStatus}</span>
+                )}
               </div>
             )}
 
             <p className="text-[10px] text-slate-400 leading-normal">
-              💡 <strong>Como usar:</strong> No PC, clique em <u>Enviar do PC para Nuvem</u>. No Celular, abra o site com o mesmo código e clique em <u>Baixar no Celular</u>.
+              ⚡ <strong>100% Automático:</strong> Qualquer alteração feita no PC ou celular salva e atualiza instantaneamente no outro aparelho. Basta usar o mesmo código de sincronização.
             </p>
           </div>
 
