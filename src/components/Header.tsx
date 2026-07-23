@@ -21,6 +21,7 @@ interface HeaderProps {
   onOpenNewExpense: () => void;
   onExportExcel: () => void;
   isSyncing?: boolean;
+  onForceSync?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNewExpense,
   onExportExcel,
   isSyncing,
+  onForceSync,
 }) => {
   // Format month YYYY-MM to readable string (e.g. "Julho 2026")
   const formatMonthLabel = (monthStr: string) => {
@@ -75,14 +77,18 @@ export const Header: React.FC<HeaderProps> = ({
                   <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
                     Gestão Proporcional
                   </h1>
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 shadow-sm">
+                  <button
+                    onClick={onForceSync || onOpenSettings}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/90 text-emerald-300 border border-emerald-800/80 shadow-sm hover:bg-emerald-900 transition-all cursor-pointer"
+                    title="Clique para sincronizar com a nuvem"
+                  >
                     {isSyncing ? (
                       <RefreshCw className="w-3 h-3 text-emerald-400 animate-spin" />
                     ) : (
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     )}
-                    <span>{isSyncing ? 'Sincronizando...' : 'Nuvem Ativa'}</span>
-                  </span>
+                    <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Nuvem'}</span>
+                  </button>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Orçamento Familiar: <span className="text-emerald-400 font-medium">{settings.p1Name}</span> & <span className="text-teal-300 font-medium">{settings.p2Name}</span>

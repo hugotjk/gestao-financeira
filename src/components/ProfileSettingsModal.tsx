@@ -9,7 +9,7 @@ interface ProfileSettingsModalProps {
   onSaveSettings: (newP1Name: string, newP2Name: string, newReservePercentage: number) => void;
   onClearAllData?: () => void;
   onImportBackup?: (data: { settings: AppSettings; incomes: IncomeSource[]; expenses: ExpenseItem[] }) => void;
-  onForceSync?: () => void;
+  onForceSync?: (direction?: 'pull' | 'push') => void;
   onClose: () => void;
 }
 
@@ -117,36 +117,61 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           
           {/* SYNC ROOM KEY FOR MULTI DEVICE */}
-          <div className="bg-slate-950 p-3.5 rounded-2xl border border-indigo-900/50 space-y-2">
+          <div className="bg-slate-950 p-3.5 rounded-2xl border border-indigo-900/50 space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
                 <Key className="w-3.5 h-3.5 text-indigo-400" />
-                Código da Nuvem (Sincroniza Celular + PC)
+                Código de Sincronização (Celular + PC)
               </label>
-              {onForceSync && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onForceSync();
-                    setImportStatus('Sincronizando com a nuvem...');
-                    setTimeout(() => setImportStatus(null), 2000);
-                  }}
-                  className="text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-2 py-1 rounded-lg flex items-center gap-1 transition-all shrink-0"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  <span>Sincronizar</span>
-                </button>
-              )}
             </div>
+            
             <input
               type="text"
               value={syncRoom}
-              onChange={e => setSyncRoom(e.target.value)}
+              onChange={e => {
+                setSyncRoom(e.target.value);
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('family_budget_sync_room', e.target.value.trim() || 'casal_hugo_mariana');
+                }
+              }}
               placeholder="Ex: casal_hugo_mariana"
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
             />
-            <p className="text-[10px] text-slate-400">
-              Coloque o <strong>mesmo código no computador e no celular</strong> para ambos compartilharem os lançamentos em tempo real na Vercel.
+
+            {onForceSync && (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('family_budget_sync_room', syncRoom.trim() || 'casal_hugo_mariana');
+                    }
+                    onForceSync('push');
+                  }}
+                  className="py-2 px-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Enviar do PC para Nuvem</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('family_budget_sync_room', syncRoom.trim() || 'casal_hugo_mariana');
+                    }
+                    onForceSync('pull');
+                  }}
+                  className="py-2 px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Baixar no Celular</span>
+                </button>
+              </div>
+            )}
+
+            <p className="text-[10px] text-slate-400 leading-normal">
+              💡 <strong>Como usar:</strong> No PC, clique em <u>Enviar do PC para Nuvem</u>. No Celular, abra o site com o mesmo código e clique em <u>Baixar no Celular</u>.
             </p>
           </div>
 

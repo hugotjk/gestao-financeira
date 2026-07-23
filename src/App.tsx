@@ -59,21 +59,41 @@ export default function App() {
   const [focusUnconfirmed, setFocusUnconfirmed] = useState(false);
 
   // Core sync helper
-  const syncServerAndLocalData = async () => {
+  const syncServerAndLocalData = async (forceDirection?: 'pull' | 'push') => {
     setIsSyncing(true);
     try {
       const serverData = await fetchServerData();
       const localData = loadLocalData();
 
+      if (forceDirection === 'pull') {
+        if (serverData && (serverData.incomes.length > 0 || serverData.expenses.length > 0 || serverData.settings)) {
+          setSettings(serverData.settings);
+          setIncomes(serverData.incomes);
+          setExpenses(serverData.expenses);
+          saveLocalData(serverData.settings, serverData.incomes, serverData.expenses, false);
+          alert('✅ Sucesso! Dados da nuvem foram baixados para o seu celular/navegador.');
+        } else {
+          alert('⚠️ Nenhum dado encontrado na nuvem para esta sala. Verifique se o PC enviou os dados com o mesmo código.');
+        }
+        return;
+      }
+
+      if (forceDirection === 'push') {
+        await pushServerData(localData.settings, localData.incomes, localData.expenses);
+        alert('✅ Sucesso! Seus dados foram salvos e enviados para a nuvem.');
+        return;
+      }
+
+      // Auto Sync logic
       if (serverData) {
         const localHasItems = localData.incomes.length > 0 || localData.expenses.length > 0;
         const serverHasItems = serverData.incomes.length > 0 || serverData.expenses.length > 0;
 
         if (localHasItems && !serverHasItems) {
-          // Push existing local data from computer session to server storage
+          // Push existing local data from PC to server storage
           await pushServerData(localData.settings, localData.incomes, localData.expenses);
         } else if (serverData.updatedAt > (localData.updatedAt || 0) || (!localHasItems && serverHasItems)) {
-          // Server has newer or existing data, update local state & local storage
+          // Server has newer or existing data, update local state
           setSettings(serverData.settings);
           setIncomes(serverData.incomes);
           setExpenses(serverData.expenses);
@@ -384,6 +404,7 @@ export default function App() {
         }}
         onExportExcel={handleExportExcel}
         isSyncing={isSyncing}
+        onForceSync={() => syncServerAndLocalData()}
       />
 
       {/* MAIN CONTAINER */}

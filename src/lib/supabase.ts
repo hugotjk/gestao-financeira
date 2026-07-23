@@ -42,29 +42,89 @@ export function saveSupabaseCredentials(url: string, key: string) {
 }
 
 // -------------------------------------------------------------------
+// -------------------------------------------------------------------
 // LOCAL STORAGE + SERVER DATA SYNC + BROADCAST CHANNEL REALTIME ENGINE
 // -------------------------------------------------------------------
 const broadcastChannel = typeof window !== 'undefined' ? new BroadcastChannel('family_budget_realtime_channel') : null;
 
-export async function fetchServerData() {
-  try {
-    const room = (typeof window !== 'undefined' ? localStorage.getItem('family_budget_sync_room') : null) || 'default_budget';
-    const res = await fetch(`/api/data?room=${encodeURIComponent(room)}`, {
-      headers: { 'x-sync-room': room },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.hasData) return null;
-    return data as {
-      settings: AppSettings;
-      incomes: IncomeSource[];
-      expenses: ExpenseItem[];
-      updatedAt: number;
-    };
-  } catch (err) {
-    console.warn('Failed to fetch server data:', err);
-    return null;
+const APP_KEY = 'family_budget_app_2026_v1';
+
+function toBase64UrlClient(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
   }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64UrlClient(b64url: string): string {
+  let b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) {
+    b64 += '=';
+  }
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+export async function fetchServerData() {
+  const room = (typeof window !== 'undefined' ? localStorage.getItem('family_budget_sync_room') : null) || 'casal_hugo_mariana';
+  const cleanRoom = room.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'casal_hugo_mariana';
+
+  // 1. Try internal API endpoint
+  try {
+    const res = await fetch(`/api/data?room=${encodeURIComponent(cleanRoom)}`, {
+      headers: { 'x-sync-room': cleanRoom },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.hasData) {
+        return data as {
+          settings: AppSettings;
+          incomes: IncomeSource[];
+          expenses: ExpenseItem[];
+          updatedAt: number;
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('API route /api/data not available, trying direct cloud fallback...');
+  }
+
+  // 2. Direct client-side cloud fallback
+  try {
+    const kvKey = `room_${cleanRoom}`;
+    const kvRes = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${APP_KEY}/${kvKey}`);
+    if (kvRes.ok) {
+      const text = await kvRes.text();
+      if (text && text !== 'null' && text.trim().length > 0) {
+        let b64 = text.trim();
+        if (b64.startsWith('"') && b64.endsWith('"')) {
+          b64 = JSON.parse(b64);
+        }
+        if (b64 && typeof b64 === 'string') {
+          const jsonStr = fromBase64UrlClient(b64);
+          const parsed = JSON.parse(jsonStr);
+          if (parsed && (parsed.incomes || parsed.expenses || parsed.settings)) {
+            return parsed as {
+              settings: AppSettings;
+              incomes: IncomeSource[];
+              expenses: ExpenseItem[];
+              updatedAt: number;
+            };
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Direct cloud fetch failed:', err);
+  }
+
+  return null;
 }
 
 export async function pushServerData(
@@ -72,20 +132,43 @@ export async function pushServerData(
   incomes: IncomeSource[],
   expenses: ExpenseItem[]
 ) {
+  const timestamp = Date.now();
+  localStorage.setItem('family_budget_updated_at', timestamp.toString());
+  const room = (typeof window !== 'undefined' ? localStorage.getItem('family_budget_sync_room') : null) || 'casal_hugo_mariana';
+  const cleanRoom = room.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'casal_hugo_mariana';
+  const payload = { settings, incomes, expenses, updatedAt: timestamp };
+
+  // 1. Try internal API route
+  let success = false;
   try {
-    const timestamp = Date.now();
-    localStorage.setItem('family_budget_updated_at', timestamp.toString());
-    const room = (typeof window !== 'undefined' ? localStorage.getItem('family_budget_sync_room') : null) || 'default_budget';
-    await fetch(`/api/data?room=${encodeURIComponent(room)}`, {
+    const res = await fetch(`/api/data?room=${encodeURIComponent(cleanRoom)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-sync-room': room,
+        'x-sync-room': cleanRoom,
       },
-      body: JSON.stringify({ settings, incomes, expenses, updatedAt: timestamp }),
+      body: JSON.stringify(payload),
     });
+    if (res.ok) {
+      success = true;
+    }
   } catch (err) {
-    console.warn('Failed to push server data:', err);
+    console.warn('API route push failed, trying direct cloud fallback...');
+  }
+
+  // 2. Direct client-side cloud fallback
+  if (!success) {
+    try {
+      const kvKey = `room_${cleanRoom}`;
+      const jsonStr = JSON.stringify(payload);
+      const b64 = toBase64UrlClient(jsonStr);
+      await fetch(`https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/${APP_KEY}/${kvKey}/${b64}`, {
+        method: 'POST',
+        headers: { 'Content-Length': '0' },
+      });
+    } catch (err) {
+      console.warn('Direct cloud push failed:', err);
+    }
   }
 }
 
