@@ -1,0 +1,353 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  AppSettings,
+  ExpenseItem,
+  IncomeSource,
+  MonthlyProportionalSummary,
+  ParsedBillData,
+  ReserveContribution,
+} from './types';
+import {
+  loadLocalData,
+  saveLocalData,
+  subscribeToRealtimeChanges,
+  cascadeNameChange,
+} from './lib/supabase';
+import { calculateProportionalSummary } from './lib/calculator';
+import { generateExcelReport } from './lib/exportToExcel';
+
+import { Header } from './components/Header';
+import { DashboardSummary } from './components/DashboardSummary';
+import { IncomeSection } from './components/IncomeSection';
+import { ExpenseSection } from './components/ExpenseSection';
+import { BillDistributionModal } from './components/BillDistributionModal';
+import { OcrScannerModal } from './components/OcrScannerModal';
+import { ProfileSettingsModal } from './components/ProfileSettingsModal';
+import { SupabaseConfigModal } from './components/SupabaseConfigModal';
+import { ReserveHistoryModal } from './components/ReserveHistoryModal';
+
+import { SQL_SCHEMA_SCRIPT } from './data/schema';
+
+export default function App() {
+  const [currentMonth, setCurrentMonth] = useState('2026-07');
+
+  // Core Data State
+  const [settings, setSettings] = useState<AppSettings>({
+    p1Name: 'Hugo Alves',
+    p2Name: 'Mariana Dique',
+    reservePercentage: 20,
+  });
+  const [incomes, setIncomes] = useState<IncomeSource[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Modals
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSupabaseOpen, setIsSupabaseOpen] = useState(false);
+  const [isDistributionOpen, setIsDistributionOpen] = useState(false);
+  const [isOcrOpen, setIsOcrOpen] = useState(false);
+  const [isReserveHistoryOpen, setIsReserveHistoryOpen] = useState(false);
+  const [focusUnconfirmed, setFocusUnconfirmed] = useState(false);
+
+  // Load initial data
+  useEffect(() => {
+    const { settings: loadedSettings, incomes: loadedIncomes, expenses: loadedExpenses } = loadLocalData();
+    setSettings(loadedSettings);
+    setIncomes(loadedIncomes);
+    setExpenses(loadedExpenses);
+  }, []);
+
+  // Setup Realtime Sync Subscription
+  useEffect(() => {
+    const unsubscribe = subscribeToRealtimeChanges(() => {
+      setIsSyncing(true);
+      const { settings: updatedS, incomes: updatedI, expenses: updatedE } = loadLocalData();
+      setSettings(updatedS);
+      setIncomes(updatedI);
+      setExpenses(updatedE);
+      setTimeout(() => setIsSyncing(false), 500);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Persist State Whenever Modified
+  const updateAppData = (newSettings: AppSettings, newIncomes: IncomeSource[], newExpenses: ExpenseItem[]) => {
+    setSettings(newSettings);
+    setIncomes(newIncomes);
+    setExpenses(newExpenses);
+    saveLocalData(newSettings, newIncomes, newExpenses);
+  };
+
+  // Filtered month datasets
+  const monthIncomes = useMemo(() => {
+    return incomes.filter(i => i.monthYear === currentMonth);
+  }, [incomes, currentMonth]);
+
+  const monthExpenses = useMemo(() => {
+    return expenses.filter(e => e.monthYear === currentMonth);
+  }, [expenses, currentMonth]);
+
+  // Proportional Financial Summary
+  const summary: MonthlyProportionalSummary = useMemo(() => {
+    return calculateProportionalSummary(
+      settings.p1Name,
+      settings.p2Name,
+      monthIncomes,
+      monthExpenses,
+      settings.reservePercentage
+    );
+  }, [settings, monthIncomes, monthExpenses]);
+
+  // Compute Couple Reserve Contributions
+  const reserveContributions: ReserveContribution[] = useMemo(() => {
+    return incomes
+      .filter(i => i.type === 'extra')
+      .map(inc => ({
+        id: `res-${inc.id}`,
+        monthYear: inc.monthYear,
+        incomeSourceId: inc.id,
+        userId: inc.userId,
+        userName: inc.userName,
+        extraIncomeDescription: inc.description,
+        extraIncomeAmount: inc.amount,
+        percentageApplied: settings.reservePercentage,
+        reserveAmount: (inc.amount * settings.reservePercentage) / 100,
+        createdAt: inc.createdAt,
+      }));
+  }, [incomes, settings.reservePercentage]);
+
+  // --- HANDLERS: INCOMES ---
+  const handleAddIncome = (incomeData: Omit<IncomeSource, 'id' | 'createdAt'>) => {
+    const newInc: IncomeSource = {
+      ...incomeData,
+      id: `inc-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    updateAppData(settings, [...incomes, newInc], expenses);
+  };
+
+  const handleUpdateIncome = (updatedInc: IncomeSource) => {
+    const newIncomes = incomes.map(i => (i.id === updatedInc.id ? updatedInc : i));
+    updateAppData(settings, newIncomes, expenses);
+  };
+
+  const handleDeleteIncome = (id: string) => {
+    const newIncomes = incomes.filter(i => i.id !== id);
+    updateAppData(settings, newIncomes, expenses);
+  };
+
+  // --- HANDLERS: EXPENSES ---
+  const handleAddExpense = (expenseData: Omit<ExpenseItem, 'id' | 'updatedAt'>) => {
+    const newExp: ExpenseItem = {
+      ...expenseData,
+      id: `exp-${Date.now()}`,
+      updatedAt: new Date().toISOString(),
+    };
+    updateAppData(settings, incomes, [...expenses, newExp]);
+  };
+
+  const handleUpdateExpense = (updatedExp: ExpenseItem) => {
+    const newExpenses = expenses.map(e => (e.id === updatedExp.id ? updatedExp : e));
+    updateAppData(settings, incomes, newExpenses);
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    const newExpenses = expenses.filter(e => e.id !== id);
+    updateAppData(settings, incomes, newExpenses);
+  };
+
+  // --- CASCADING PROFILE NAME UPDATE ---
+  const handleSaveSettings = (newP1Name: string, newP2Name: string, newReservePercentage: number) => {
+    const oldP1 = settings.p1Name;
+    const oldP2 = settings.p2Name;
+
+    const { updatedIncomes, updatedExpenses } = cascadeNameChange(
+      incomes,
+      expenses,
+      oldP1,
+      newP1Name,
+      oldP2,
+      newP2Name
+    );
+
+    const newSettings: AppSettings = {
+      ...settings,
+      p1Name: newP1Name,
+      p2Name: newP2Name,
+      reservePercentage: newReservePercentage,
+    };
+
+    updateAppData(newSettings, updatedIncomes, updatedExpenses);
+  };
+
+  // --- BILL ASSIGNMENTS FROM DISTRIBUTION ALGORITHM ---
+  const handleApplyAssignments = (assignments: { billId: string; assignedTo: 'p1' | 'p2' }[]) => {
+    const assignmentMap = new Map(assignments.map(a => [a.billId, a.assignedTo]));
+    const newExpenses = expenses.map(e => {
+      if (assignmentMap.has(e.id)) {
+        return { ...e, assignedTo: assignmentMap.get(e.id)! };
+      }
+      return e;
+    });
+    updateAppData(settings, incomes, newExpenses);
+  };
+
+  // --- OCR DETECTED BILL ---
+  const handleBillFromOcr = (parsed: ParsedBillData) => {
+    const newExp: ExpenseItem = {
+      id: `exp-ocr-${Date.now()}`,
+      monthYear: currentMonth,
+      description: parsed.description || 'Conta Digitalizada',
+      category: 'Utilidades',
+      divisionType: 'shared',
+      expenseType: parsed.amount ? 'fixed' : 'estimated',
+      estimatedAmount: parsed.amount || 0,
+      actualAmount: parsed.amount || 0,
+      isConfirmed: !!parsed.amount,
+      dueDate: parsed.dueDate || new Date().toISOString().slice(0, 10),
+      paymentStatus: 'pending',
+      paidBy: 'none',
+      assignedTo: 'none',
+      barcode: parsed.barcode || '',
+      pixCode: parsed.pixCode || '',
+      notes: 'Importado via Leitor OCR / Pix',
+      updatedAt: new Date().toISOString(),
+    };
+    updateAppData(settings, incomes, [...expenses, newExp]);
+  };
+
+  // --- EXPORT TO EXCEL ---
+  const handleExportExcel = () => {
+    generateExcelReport(currentMonth, summary, monthExpenses, reserveContributions);
+  };
+
+  const handleClearAllData = () => {
+    updateAppData(settings, [], []);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950">
+      
+      {/* HEADER */}
+      <Header
+        currentMonth={currentMonth}
+        onMonthChange={setCurrentMonth}
+        settings={settings}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSupabase={() => setIsSupabaseOpen(true)}
+        onOpenDistribution={() => setIsDistributionOpen(true)}
+        onOpenNewExpense={() => {
+          // Open new expense modal
+          const newExp: Omit<ExpenseItem, 'id' | 'updatedAt'> = {
+            monthYear: currentMonth,
+            description: 'Nova Conta',
+            category: 'Geral',
+            divisionType: 'shared',
+            expenseType: 'fixed',
+            actualAmount: 0,
+            isConfirmed: true,
+            dueDate: new Date().toISOString().slice(0, 10),
+            paymentStatus: 'pending',
+            paidBy: 'none',
+          };
+          handleAddExpense(newExp);
+        }}
+        onExportExcel={handleExportExcel}
+        isSyncing={isSyncing}
+      />
+
+      {/* MAIN CONTAINER */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        {/* DASHBOARD CARDS & TRAVA DE SEGURANÇA BANNER */}
+        <DashboardSummary
+          summary={summary}
+          reservePercentage={settings.reservePercentage}
+          onOpenReserveHistory={() => setIsReserveHistoryOpen(true)}
+          onFocusUnconfirmed={() => setFocusUnconfirmed(true)}
+        />
+
+        {/* INCOMES SECTION */}
+        <IncomeSection
+          currentMonth={currentMonth}
+          p1Name={settings.p1Name}
+          p2Name={settings.p2Name}
+          incomes={monthIncomes}
+          reservePercentage={settings.reservePercentage}
+          onAddIncome={handleAddIncome}
+          onUpdateIncome={handleUpdateIncome}
+          onDeleteIncome={handleDeleteIncome}
+        />
+
+        {/* EXPENSES SECTION */}
+        <ExpenseSection
+          currentMonth={currentMonth}
+          p1Name={settings.p1Name}
+          p2Name={settings.p2Name}
+          expenses={monthExpenses}
+          onAddExpense={handleAddExpense}
+          onUpdateExpense={handleUpdateExpense}
+          onDeleteExpense={handleDeleteExpense}
+          onOpenOcrScanner={() => setIsOcrOpen(true)}
+          focusUnconfirmedTab={focusUnconfirmed}
+        />
+
+      </main>
+
+      {/* FOOTER */}
+      <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-center text-xs text-slate-500">
+        <p>
+          Gestão Financeira Familiar Proporcional &bull; Hospedagem Vercel & Supabase Realtime
+        </p>
+      </footer>
+
+      {/* MODALS */}
+      {isSettingsOpen && (
+        <ProfileSettingsModal
+          settings={settings}
+          onSaveSettings={handleSaveSettings}
+          onClearAllData={handleClearAllData}
+          onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
+
+      {isSupabaseOpen && (
+        <SupabaseConfigModal
+          sqlScript={SQL_SCHEMA_SCRIPT}
+          onClose={() => setIsSupabaseOpen(false)}
+        />
+      )}
+
+      {isDistributionOpen && (
+        <BillDistributionModal
+          summary={summary}
+          expenses={monthExpenses}
+          onApplyAssignments={handleApplyAssignments}
+          onClose={() => setIsDistributionOpen(false)}
+        />
+      )}
+
+      {isOcrOpen && (
+        <OcrScannerModal
+          onBillDetected={handleBillFromOcr}
+          onClose={() => setIsOcrOpen(false)}
+        />
+      )}
+
+      {isReserveHistoryOpen && (
+        <ReserveHistoryModal
+          incomes={incomes}
+          reservePercentage={settings.reservePercentage}
+          onClose={() => setIsReserveHistoryOpen(false)}
+        />
+      )}
+
+    </div>
+  );
+}

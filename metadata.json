@@ -1,0 +1,6 @@
+{
+  "name": "Gestão Financeira Familiar Proporcional",
+  "description": "Sistema de gestão orçamentária para casais com divisão proporcional de contas, trava de segurança para contas previstas, distribuição otimizada de boletos, leitor OCR/Pix e exportação em Excel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
